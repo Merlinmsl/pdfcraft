@@ -271,14 +271,41 @@ fn selected_text_replace_action_opens_replacement_composer() {
 }
 
 #[test]
-fn selected_text_comment_action_opens_note_composer() {
+fn selected_text_comment_action_highlights_the_text_with_the_note() {
+    // Acrobat's Comment on a text selection highlights the text and keeps the note on that
+    // highlight; it does not drop a sticky-note icon beside the text.
     let mut h = harness(|_| {});
     h.state_mut().views[0].select_text(0, 4, 8);
     h.run_steps(3);
     h.get_by_label("Add comment").click();
     h.run_steps(2);
-    assert!(matches!(h.state().views[0].comments.composer.as_ref().map(|c| &c.kind), Some(pdfcraft_ui_egui::comments::ComposerKind::Note)));
+    assert!(matches!(h.state().views[0].comments.composer.as_ref().map(|c| &c.kind), Some(pdfcraft_ui_egui::comments::ComposerKind::Highlight)));
     assert!(h.state().views[0].selected_text().is_none());
+    field(&h, "Add a comment").type_text("Check this word");
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let c = comments(&h);
+    assert_eq!(c.len(), 1, "one annotation, not a highlight plus a note: {c:?}");
+    assert_eq!((c[0].subtype.as_str(), c[0].contents.as_deref()), ("Highlight", Some("Check this word")));
+    // It covers the selected word on the text line (baseline 150, 14 pt).
+    let r = c[0].rect;
+    assert!(r[1] < 155.0 && r[3] > 150.0 && r[0] > 20.0 && r[2] < 150.0, "{r:?}");
+    assert!(h.state().views[0].comments.marked.is_none(), "the quads are consumed");
+}
+
+#[test]
+fn cancelling_a_comment_on_selected_text_adds_nothing() {
+    let mut h = harness(|_| {});
+    h.state_mut().views[0].select_text(0, 4, 8);
+    h.run_steps(3);
+    h.get_by_label("Add comment").click();
+    h.run_steps(2);
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert!(comments(&h).is_empty());
+    assert!(h.state().views[0].comments.composer.is_none());
+    assert!(h.state().views[0].comments.marked.is_none(), "no stale quads for the next comment");
 }
 
 #[test]

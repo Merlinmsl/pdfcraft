@@ -394,6 +394,9 @@ pub enum ComposerKind {
     },
     /// Replace the selected text (`CommentView::replace` holds the quads).
     Replace,
+    /// Comment on the selected text: a highlight whose note is the typed text, as Acrobat's
+    /// "Comment" on a text selection makes (`CommentView::marked` holds the quads).
+    Highlight,
     /// Edit the text of the comment at this index on the composer's page.
     Edit(usize),
 }
@@ -443,6 +446,8 @@ pub struct CommentView {
     pub default_request: Option<(usize, usize)>,
     /// Replace Text: the struck-out text's quads while the replacement is typed.
     pub replace: Option<Vec<[f64; 8]>>,
+    /// Comment on selected text: the highlighted text's quads while the comment is typed.
+    pub marked: Option<Vec<[f64; 8]>>,
     /// Attach file: where the icon goes (page, top-left in user space), for the app to pick a file.
     pub attach_at: Option<(usize, [f64; 2])>,
     pub search_focus: bool,
@@ -1183,6 +1188,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     let c = view.comments.composer.as_mut()?;
     let title = match c.kind {
         ComposerKind::Note => "Sticky note",
+        ComposerKind::Highlight => "Highlight",
         ComposerKind::TextBox => "Text box",
         ComposerKind::Callout { .. } => "Callout",
         ComposerKind::Caret { .. } => "Inserted text",
@@ -1237,6 +1243,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     });
     if cancel {
         view.comments.composer = None;
+        view.comments.marked = None;
         return None;
     }
     if !post {
@@ -1249,6 +1256,11 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         ComposerKind::Note => {
             view.comments.tool_done = true;
             Some(new_comment(&cx, CommentTool::Note, Shape::Note { at: c.at, icon: NoteIcon::Comment }, text))
+        }
+        ComposerKind::Highlight => {
+            view.comments.tool_done = true;
+            let quads = view.comments.marked.take()?;
+            Some(new_comment(&cx, CommentTool::Highlight, Shape::TextMarkup { kind: Markup::Highlight, quads }, text))
         }
         ComposerKind::TextBox => {
             view.comments.tool_done = true;
